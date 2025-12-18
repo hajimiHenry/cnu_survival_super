@@ -37,7 +37,7 @@
 ```bash
 # 克隆项目
 git clone https://github.com/hajimiHenry/cnu_survival_super.git
-cd cnu_survival_assistant
+cd cnu_survival_super
 
 # 创建虚拟环境（推荐）
 python -m venv .venv

@@ -81,7 +81,7 @@ TAVILY_API_KEY=tvly-your-api-key
 python build_index.py
 ```
 
-首次运行会自动下载嵌入模型（约 100MB）。
+首次运行会自动下载嵌入模型（约 500MB）。
 
 ### 4. 启动系统
 

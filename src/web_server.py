@@ -1,11 +1,12 @@
 """
 Web GUI 后端服务
 基于 FastAPI 实现 RESTful API
+支持增强版RAG功能
 """
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 # 添加项目根目录到路径
@@ -21,8 +22,10 @@ from dotenv import load_dotenv, set_key
 
 from src.vector_store import load_vector_store
 from src.rag_chain import answer_question
+from src.enhanced_rag_chain import EnhancedRAGChain
 from src.state import ConversationState, load_user_state, save_user_state
 from src.intent_router import detect_intent
+from src.logger import StructuredLogger, get_trace_detail
 
 
 # .env 文件路径
@@ -36,12 +39,29 @@ load_dotenv(ENV_FILE, override=True)
 
 class ChatRequest(BaseModel):
     question: str
+    enable_web_search: bool = True  # 是否启用联网搜索
+    use_enhanced: bool = True       # 是否使用增强版RAG
 
 
 class ChatResponse(BaseModel):
     answer: str
     intent: str
     new_memories: List[str]
+
+
+class EnhancedChatResponse(BaseModel):
+    """增强版聊天响应"""
+    answer: str
+    intent: str
+    new_memories: List[str]
+    trace_id: str                                   # 追踪ID
+    evidence_local: List[Dict[str, Any]]            # 本地证据
+    evidence_web: List[Dict[str, Any]]              # 网络证据
+    used_fallback: bool                             # 是否触发回退
+    used_iteration: bool                            # 是否触发迭代
+    used_web_search: bool                           # 是否触发联网
+    retrieval_stats: Dict[str, Any]                 # 检索统计
+    total_duration_ms: float                        # 总耗时
 
 
 class ProfileData(BaseModel):
@@ -85,6 +105,7 @@ class ApiConfig(BaseModel):
 
 vector_store = None
 state = None
+enhanced_chain = None  # 增强版RAG链
 
 
 # ============ 生命周期管理 ============
@@ -92,18 +113,21 @@ state = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global vector_store, state
+    global vector_store, state, enhanced_chain
 
     print("正在加载知识库...")
     try:
         vector_store = load_vector_store()
+        enhanced_chain = EnhancedRAGChain(vector_store)
         print("知识库加载完成！")
     except FileNotFoundError:
         print("警告: 向量索引不存在，请先运行 build_index.py")
         vector_store = None
+        enhanced_chain = None
     except Exception as e:
         print(f"警告: 加载向量索引失败 - {e}")
         vector_store = None
+        enhanced_chain = None
 
     print("正在加载用户数据...")
     state = load_user_state()
@@ -111,6 +135,7 @@ async def lifespan(app: FastAPI):
 
     print("\n" + "=" * 50)
     print("服务已启动！请在浏览器中访问: http://localhost:8080")
+    print("增强功能: 检索回退 | 迭代查询 | 重排 | 多智能体 | 联网搜索")
     print("=" * 50 + "\n")
 
     yield
@@ -158,9 +183,9 @@ async def index():
     )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat")
 async def chat(request: ChatRequest):
-    """发送问题，获取回答"""
+    """发送问题，获取回答（支持增强版RAG）"""
     global state
 
     if vector_store is None:
@@ -173,21 +198,45 @@ async def chat(request: ChatRequest):
     if not question:
         raise HTTPException(status_code=400, detail="问题不能为空")
 
-    # 意图识别
-    intent, confidence = detect_intent(question)
-
     try:
-        # 获取回答
-        answer, new_memories = answer_question(vector_store, question, state)
+        # 使用增强版RAG
+        if request.use_enhanced and enhanced_chain is not None:
+            result = enhanced_chain.answer(
+                question,
+                state=state,
+                enable_web_search=request.enable_web_search
+            )
 
-        # 保存状态
-        save_user_state(state)
+            # 保存记忆和状态
+            for memory in result.new_memories:
+                state.add_memory(memory, source="AI自动提取")
+            save_user_state(state)
 
-        return ChatResponse(
-            answer=answer,
-            intent=intent.value,
-            new_memories=new_memories
-        )
+            return EnhancedChatResponse(
+                answer=result.answer,
+                intent=result.intent,
+                new_memories=result.new_memories,
+                trace_id=result.trace_id,
+                evidence_local=result.evidence_local,
+                evidence_web=result.evidence_web,
+                used_fallback=result.used_fallback,
+                used_iteration=result.used_iteration,
+                used_web_search=result.used_web_search,
+                retrieval_stats=result.retrieval_stats,
+                total_duration_ms=result.total_duration_ms
+            )
+        else:
+            # 使用原版RAG（后备）
+            intent, confidence = detect_intent(question)
+            answer, new_memories = answer_question(vector_store, question, state)
+            save_user_state(state)
+
+            return ChatResponse(
+                answer=answer,
+                intent=intent.value,
+                new_memories=new_memories
+            )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"处理问题时出错: {str(e)}")
 
@@ -373,16 +422,39 @@ async def test_api_config():
         llm = get_llm()
         # 发送一个简单的测试请求
         response = llm.invoke("你好，请回复'API连接成功'")
+        # 兼容处理：某些第三方 API 可能返回字符串而非 AIMessage 对象
+        if isinstance(response, str):
+            response_text = response
+        else:
+            response_text = response.content if hasattr(response, 'content') else str(response)
         return {
             "success": True,
             "message": "API 连接测试成功！",
-            "response": response.content[:100] if hasattr(response, 'content') else str(response)[:100]
+            "response": response_text[:100]
         }
     except Exception as e:
         return {
             "success": False,
             "message": f"API 连接测试失败: {str(e)}"
         }
+
+
+# ============ 日志查询接口 ============
+
+@app.get("/api/logs")
+async def get_logs(limit: int = 50):
+    """获取追踪日志列表"""
+    traces = StructuredLogger.list_traces(limit)
+    return {"traces": traces, "count": len(traces)}
+
+
+@app.get("/api/logs/{trace_id}")
+async def get_log_detail(trace_id: str):
+    """获取单条追踪日志详情"""
+    detail = get_trace_detail(trace_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"追踪记录 {trace_id} 不存在")
+    return detail
 
 
 # ============ 运行入口 ============

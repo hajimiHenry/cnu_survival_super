@@ -1,6 +1,6 @@
 """
 命令行界面 - 实现交互式问答
-支持用户数据持久化
+支持用户数据持久化和增强版RAG功能
 """
 import sys
 from pathlib import Path
@@ -11,8 +11,14 @@ sys.path.insert(0, str(project_root))
 
 from src.vector_store import load_vector_store
 from src.rag_chain import answer_question
+from src.enhanced_rag_chain import EnhancedRAGChain
 from src.state import ConversationState, load_user_state, save_user_state
 from src.intent_router import detect_intent
+
+
+# 全局设置
+USE_ENHANCED = True  # 是否使用增强版RAG
+ENABLE_WEB_SEARCH = True  # 是否启用联网搜索
 
 
 def print_banner():
@@ -97,6 +103,16 @@ def main():
     except Exception as e:
         print(f"\n错误: 加载向量索引失败 - {e}")
         return
+
+    # 初始化增强版RAG链
+    enhanced_chain = None
+    if USE_ENHANCED:
+        try:
+            enhanced_chain = EnhancedRAGChain(vector_store)
+            print("增强版RAG已启用（检索回退 | 迭代查询 | 重排 | 联网搜索）")
+        except Exception as e:
+            print(f"警告: 增强版RAG初始化失败，将使用基础版 - {e}")
+            enhanced_chain = None
 
     # 加载用户状态（如果存在）
     state = load_user_state()
@@ -260,9 +276,54 @@ def main():
             print("正在思考...\n")
 
             try:
-                answer, new_memories = answer_question(vector_store, user_input, state)
-                print("助手:")
-                print(format_answer(answer))
+                # 使用增强版RAG
+                if USE_ENHANCED and enhanced_chain is not None:
+                    result = enhanced_chain.answer(
+                        user_input,
+                        state=state,
+                        enable_web_search=ENABLE_WEB_SEARCH
+                    )
+                    answer = result.answer
+                    new_memories = result.new_memories
+
+                    # 显示增强版信息
+                    print("助手:")
+                    print(format_answer(answer))
+
+                    # 显示检索统计
+                    tags = []
+                    if result.used_fallback:
+                        tags.append("回退检索")
+                    if result.used_iteration:
+                        tags.append("迭代查询")
+                    if result.used_web_search:
+                        tags.append("联网搜索")
+
+                    if tags:
+                        print(f"\n  [使用功能: {' | '.join(tags)}]")
+
+                    # 显示证据来源
+                    if result.evidence_local or result.evidence_web:
+                        print("\n  " + "-" * 40)
+                        print("  [证据来源]")
+                        if result.evidence_local:
+                            print(f"    本地知识库: {len(result.evidence_local)} 条")
+                            for i, ev in enumerate(result.evidence_local[:3], 1):
+                                source = ev.get('source', '未知')
+                                print(f"      {i}. {source}")
+                        if result.evidence_web:
+                            print(f"    网络搜索: {len(result.evidence_web)} 条")
+                            for i, ev in enumerate(result.evidence_web[:2], 1):
+                                source = ev.get('source', '未知')
+                                print(f"      {i}. {source[:50]}...")
+                        print(f"    耗时: {result.total_duration_ms:.0f}ms")
+                        print("  " + "-" * 40)
+
+                else:
+                    # 使用基础版RAG
+                    answer, new_memories = answer_question(vector_store, user_input, state)
+                    print("助手:")
+                    print(format_answer(answer))
 
                 # 显示新提取的记忆
                 if new_memories:

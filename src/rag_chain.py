@@ -365,7 +365,11 @@ def answer_question(
     # 5. 调用 LLM
     llm = get_llm()
     response = llm.invoke(prompt)
-    raw_answer = response.content
+    # 兼容处理：某些第三方 API 可能返回字符串而非 AIMessage 对象
+    if isinstance(response, str):
+        raw_answer = response
+    else:
+        raw_answer = response.content
 
     # 6. 提取记忆
     clean_answer, new_memories = extract_memories(raw_answer)
@@ -399,7 +403,9 @@ def answer_without_rag(question: str, state: ConversationState) -> str:
 
     llm = get_llm()
     response = llm.invoke(prompt)
-
+    # 兼容处理：某些第三方 API 可能返回字符串而非 AIMessage 对象
+    if isinstance(response, str):
+        return response
     return response.content
 
 

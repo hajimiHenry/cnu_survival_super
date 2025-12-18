@@ -14,7 +14,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-PORT = 18080  # 使用不常用的端口，避免冲突
+PORT = 8080  # 服务端口
 
 
 def open_browser():

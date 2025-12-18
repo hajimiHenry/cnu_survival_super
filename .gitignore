@@ -26,6 +26,8 @@ user_data.json
 # 系统文件
 .DS_Store
 Thumbs.db
+nul
 
 # 日志
 *.log
+logs/

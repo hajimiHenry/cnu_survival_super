@@ -5,6 +5,15 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+
+def normalize_base_url(url: str) -> str:
+    if not url:
+        return url
+    trimmed = url.rstrip("/")
+    if trimmed.endswith("/v1"):
+        return trimmed
+    return trimmed + "/v1"
+
 # 加载 .env 文件
 load_dotenv()
 
@@ -34,7 +43,9 @@ CATEGORY_MAP = {
 # LLM 配置（用于对话）
 # 请在环境变量或 .env 文件中设置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENAI_BASE_URL = normalize_base_url(
+    os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+)
 MODEL_NAME = os.getenv("MODEL_NAME", "claude-opus-4-5-20251101")
 
 # 本地嵌入模型配置（免费，无需 API）

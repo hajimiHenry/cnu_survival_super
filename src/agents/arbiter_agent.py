@@ -241,6 +241,10 @@ class ArbiterAgent:
 要点：
 """ + "\n".join([f"- {p}" for p in web_result.key_points])
 
+        local_status = "已使用" if (local_result and local_result.evidence) else "未找到"
+        web_status = "已使用" if (web_result and web_result.evidence) else "未使用"
+
+
         conflict_note = ""
         if has_conflict:
             conflict_note = f"""
@@ -321,16 +325,25 @@ class ArbiterAgent:
                 elif current_section == 'conflict' and line:
                     conflict_resolution += line + " "
 
-            return answer.strip(), conflict_resolution.strip(), confidence
+            answer = answer.strip()
+            source_note = f"【来源说明】本地: {local_status} 网络: {web_status}"
+            if source_note not in answer:
+                answer = f"{answer}\n\n{source_note}"
+            return answer, conflict_resolution.strip(), confidence
 
         except Exception as e:
             # 简单后备方案
             if local_result and local_result.retrieval_success:
-                return local_result.summary, "", "low"
+                answer = local_result.summary
             elif web_result and web_result.search_success:
-                return f"（来自网络）{web_result.summary}", "", "low"
+                answer = f"（来自网络）{web_result.summary}"
             else:
-                return "抱歉，未能找到足够的信息来回答您的问题。", "", "low"
+                answer = "抱歉，未能找到足够的信息来回答您的问题。"
+
+            source_note = f"【来源说明】本地: {local_status} 网络: {web_status}"
+            if source_note not in answer:
+                answer = f"{answer}\n\n{source_note}"
+            return answer, "", "low"
 
     def _mark_used_evidence(
         self,

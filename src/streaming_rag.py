@@ -86,6 +86,35 @@ class StreamingRAGProcessor:
             )
         return self._llm
 
+    def _should_use_history(self, question: str) -> bool:
+        q = question.strip()
+        if len(q) <= 6:
+            return True
+        followup_markers = (
+            "那", "这样", "这种", "这个", "如果", "要是", "怎么办",
+            "会怎样", "会不会", "还能", "还可以", "还要", "还有", "然后", "再",
+            "继续", "之后", "前面", "刚才"
+        )
+        return any(marker in q for marker in followup_markers)
+
+    def _contextualize_question(
+        self,
+        question: str,
+        state: Optional[ConversationState]
+    ) -> str:
+        if not state or not state.history:
+            return question
+        if not self._should_use_history(question):
+            return question
+        last_user = ""
+        for msg in reversed(state.history):
+            if msg.role == "user":
+                last_user = msg.content.strip()
+                break
+        if not last_user or last_user in question:
+            return question
+        return f"{last_user} {question}"
+
     async def process_stream(
         self,
         question: str,
@@ -110,6 +139,7 @@ class StreamingRAGProcessor:
         await asyncio.sleep(0.05)  # 小延迟确保前端能收到
 
         try:
+            context_question = self._contextualize_question(question, state)
             # ========== 1. 意图识别 ==========
             yield StreamEvent(
                 event_type=EventType.INTENT_START,
@@ -118,7 +148,7 @@ class StreamingRAGProcessor:
             )
 
             intent, confidence = await asyncio.get_event_loop().run_in_executor(
-                None, detect_intent, question
+                None, detect_intent, context_question
             )
             yield event_intent(intent.value, confidence)
             await asyncio.sleep(0.05)
@@ -130,42 +160,13 @@ class StreamingRAGProcessor:
             # 检索
             docs_with_scores = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: similarity_search_with_score(self.vector_store, question, k=TOP_K)
+                lambda: similarity_search_with_score(self.vector_store, context_question, k=TOP_K)
             )
-            yield event_local_search(question, len(docs_with_scores))
+            yield event_local_search(context_question, len(docs_with_scores))
             await asyncio.sleep(0.05)
 
-            # 检查是否需要回退
+            # 不使用回退检索
             fallback_used = False
-            if self._judge.quick_judge(docs_with_scores, score_is_distance=True):
-                yield StreamEvent(
-                    event_type=EventType.FALLBACK_START,
-                    agent="LocalAgent",
-                    message="检索结果不理想，尝试查询改写..."
-                )
-
-                # 查询改写
-                rewrite_result = await asyncio.get_event_loop().run_in_executor(
-                    None, self._transformer.rewrite, question
-                )
-                yield StreamEvent(
-                    event_type=EventType.FALLBACK_DONE,
-                    agent="LocalAgent",
-                    message="查询已改写",
-                    detail=f"新查询: {rewrite_result.transformed_query[:50]}..."
-                )
-
-                # 重新检索
-                new_docs = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: similarity_search_with_score(
-                        self.vector_store, rewrite_result.transformed_query, k=TOP_K
-                    )
-                )
-                if new_docs:
-                    docs_with_scores = self._merge_results(docs_with_scores, new_docs)
-                    fallback_used = True
-                    yield event_local_search(rewrite_result.transformed_query, len(docs_with_scores))
 
             # 重排
             if docs_with_scores:
@@ -176,7 +177,7 @@ class StreamingRAGProcessor:
                     for doc, score in docs_with_scores
                 ]
                 rerank_result = await asyncio.get_event_loop().run_in_executor(
-                    None, self._reranker.rerank, question, docs_with_sim
+                    None, self._reranker.rerank, context_question, docs_with_sim
                 )
                 final_local_docs = [
                     (rd.document, rd.final_score)
@@ -191,7 +192,7 @@ class StreamingRAGProcessor:
             await asyncio.sleep(0.05)
 
             local_summary, local_key_points = await self._generate_local_summary(
-                question, final_local_docs
+                context_question, final_local_docs
             )
 
             local_evidence = [
@@ -240,7 +241,7 @@ class StreamingRAGProcessor:
                 await asyncio.sleep(0.05)
 
                 # 优化搜索查询
-                search_query = await self._optimize_web_query(question)
+                search_query = await self._optimize_web_query(context_question)
                 yield StreamEvent(
                     event_type=EventType.WEB_AGENT_SEARCH,
                     agent="WebAgent",
@@ -277,7 +278,7 @@ class StreamingRAGProcessor:
                     ]
 
                     web_summary, web_key_points = await self._generate_web_summary(
-                        question, web_evidence, search_response.answer
+                        context_question, web_evidence, search_response.answer
                     )
 
                     yield event_web_done(web_summary, web_key_points, len(web_evidence))
@@ -308,7 +309,7 @@ class StreamingRAGProcessor:
                 yield event_arbiter_think("综合本地和网络证据，生成最终答案...")
 
                 answer, confidence = await self._generate_arbiter_answer(
-                    question, local_summary, local_key_points,
+                    context_question, local_summary, local_key_points,
                     web_summary, web_key_points,
                     has_conflict, conflict_details
                 )
@@ -325,6 +326,10 @@ class StreamingRAGProcessor:
             await asyncio.sleep(0.05)
 
             # ========== 6. 完成 ==========
+            if state:
+                state.add_user_message(question, intent=intent.value)
+                state.add_assistant_message(answer)
+
             total_duration = (time.time() - start_time) * 1000
 
             result = StreamingResult(
@@ -555,6 +560,9 @@ class StreamingRAGProcessor:
         if has_conflict:
             conflict_note = f"\n注意：存在信息冲突 - {conflict_details}\n处理原则：以本地知识库为准。"
 
+        local_status = "已使用" if local_points else "未找到"
+        web_status = "已使用" if web_points else "未使用"
+
         prompt = f"""综合以下信息回答问题。
 
 问题：{question}
@@ -588,9 +596,18 @@ class StreamingRAGProcessor:
             for marker in ["[高]", "[中]", "[低]", "置信度：高", "置信度：中", "置信度：低"]:
                 answer = answer.replace(marker, "")
 
-            return answer.strip(), confidence
+            answer = answer.strip()
+            source_note = f"【来源说明】本地: {local_status} 网络: {web_status}"
+            if source_note not in answer:
+                answer = f"{answer}\n\n{source_note}"
+            return answer, confidence
         except Exception as e:
-            return f"综合信息回答：{local_summary}", "low"
+            # 异常分支也要追加来源说明
+            fallback_answer = f"综合信息回答：{local_summary}"
+            fallback_local_status = "已使用" if local_points else "未找到"
+            fallback_web_status = "已使用" if web_points else "未使用"
+            fallback_source_note = f"【来源说明】本地: {fallback_local_status} 网络: {fallback_web_status}"
+            return f"{fallback_answer}\n\n{fallback_source_note}", "low"
 
     async def _generate_local_answer(
         self,
@@ -601,7 +618,7 @@ class StreamingRAGProcessor:
     ) -> str:
         """仅使用本地证据生成答案"""
         if not docs:
-            return "抱歉，未能在知识库中找到相关信息来回答您的问题。"
+            return "抱歉，未能在本地知识库中找到相关信息。\n\n【来源说明】本地: 未找到 网络: 未使用"
 
         context = "\n\n".join([
             f"【参考资料{i+1}】{doc.metadata.get('source', '')}\n{doc.page_content}"
@@ -610,9 +627,13 @@ class StreamingRAGProcessor:
 
         user_info = ""
         memories = ""
+        history = ""
         if state:
             user_info = state.get_profile_summary()
             memories = state.get_memories_text()
+            history = state.get_history_text(3)
+        if history:
+            memories = f"{memories}\n\nRecent conversation:\n{history}"
 
         prompt = f"""你是首都师范大学的学业咨询助手。请基于参考资料回答问题。
 
@@ -631,9 +652,10 @@ class StreamingRAGProcessor:
             response = await asyncio.get_event_loop().run_in_executor(
                 None, llm.invoke, prompt
             )
-            return response.content.strip()
+            answer = response.content.strip()
+            return f"{answer}\n\n【来源说明】本地: 已使用 网络: 未使用"
         except Exception as e:
-            return f"生成回答时出错：{str(e)}"
+            return f"生成回答时出错：{str(e)}\n\n【来源说明】本地: 已使用 网络: 未使用"
 
 
 def create_streaming_processor(

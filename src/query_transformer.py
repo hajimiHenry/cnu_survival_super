@@ -2,6 +2,7 @@
 查询转换器 - 查询改写、查询扩展、生成混合检索参数
 """
 import time
+import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
@@ -11,6 +12,18 @@ from .config import (
     OPENAI_BASE_URL,
     MODEL_NAME
 )
+
+STOPWORDS = {
+    "什么", "怎么", "怎样", "如何", "为什么", "可以", "是否", "能否",
+    "需要", "应该", "这个", "那个", "这些", "那些", "问题", "情况",
+    "请问", "一下", "一下子", "嘛", "吗", "呢", "啊", "呀", "吧",
+    "还是", "以及", "并且", "如果", "要是", "然后", "再", "继续",
+    "就是", "就是说", "关于", "相关", "影响", "后果"
+}
+
+MONEY_TERMS = {
+    "借款", "借贷", "贷款", "欠款", "债务", "催收", "利息", "征信", "信用"
+}
 
 
 @dataclass
@@ -38,6 +51,27 @@ class QueryTransformer:
                 openai_api_base=OPENAI_BASE_URL
             )
         return self._llm
+
+    def _has_money_terms(self, text: str) -> bool:
+        return any(term in text for term in MONEY_TERMS)
+
+    def _extract_core_terms(self, text: str) -> List[str]:
+        try:
+            import jieba
+            tokens = [t.strip() for t in jieba.cut(text) if t.strip()]
+            return [t for t in tokens if len(t) >= 2 and t not in STOPWORDS]
+        except Exception:
+            return re.findall(r"[\u4e00-\u9fff]{2,}", text)
+
+    def _validate_transform(self, original: str, transformed: str) -> bool:
+        if not transformed:
+            return False
+        if self._has_money_terms(transformed) and not self._has_money_terms(original):
+            return False
+        core_terms = self._extract_core_terms(original)
+        if not core_terms:
+            return True
+        return any(term in transformed for term in core_terms)
 
     def rewrite(self, query: str) -> TransformResult:
         """
@@ -67,6 +101,9 @@ class QueryTransformer:
             llm = self._get_llm()
             response = llm.invoke(prompt)
             transformed = response.content.strip()
+            transformed = transformed.splitlines()[0].strip()
+            if not self._validate_transform(query, transformed):
+                transformed = query
         except Exception:
             transformed = query
 
@@ -108,6 +145,9 @@ class QueryTransformer:
             llm = self._get_llm()
             response = llm.invoke(prompt)
             transformed = response.content.strip()
+            transformed = transformed.splitlines()[0].strip()
+            if not self._validate_transform(query, transformed):
+                transformed = query
         except Exception:
             transformed = query
 

@@ -102,6 +102,35 @@ class EnhancedRAGChain:
             )
         return self._llm
 
+    def _should_use_history(self, question: str) -> bool:
+        q = question.strip()
+        if len(q) <= 6:
+            return True
+        followup_markers = (
+            "那", "这样", "这种", "这个", "如果", "要是", "怎么办",
+            "会怎样", "会不会", "还能", "还可以", "还要", "还有", "然后", "再",
+            "继续", "之后", "前面", "刚才"
+        )
+        return any(marker in q for marker in followup_markers)
+
+    def _contextualize_question(
+        self,
+        question: str,
+        state: Optional[ConversationState]
+    ) -> str:
+        if not state or not state.history:
+            return question
+        if not self._should_use_history(question):
+            return question
+        last_user = ""
+        for msg in reversed(state.history):
+            if msg.role == "user":
+                last_user = msg.content.strip()
+                break
+        if not last_user or last_user in question:
+            return question
+        return f"{last_user} {question}"
+
     def answer(
         self,
         question: str,
@@ -124,13 +153,14 @@ class EnhancedRAGChain:
         start_time = time.time()
 
         # 意图识别
-        intent, confidence = detect_intent(question)
+        context_question = self._contextualize_question(question, state)
+        intent, confidence = detect_intent(context_question)
         logger.set_intent(intent.value)
 
         # 判断是否需要迭代查询
-        decomposition = self._decomposer.decompose(question)
+        decomposition = self._decomposer.decompose(context_question)
         logger.log_decomposition(
-            question,
+            context_question,
             [sq.question for sq in decomposition.sub_questions],
             decomposition.should_decompose,
             decomposition.duration_ms
@@ -140,14 +170,23 @@ class EnhancedRAGChain:
         if decomposition.should_decompose:
             # 迭代查询模式
             docs_with_scores, fallback_used = self._iterative_retrieval(
-                question, decomposition, logger
+                context_question, decomposition, logger
             )
             used_iteration = True
         else:
-            # 单次检索模式（可能包含回退）
-            docs_with_scores, fallback_used = self._single_retrieval_with_fallback(
-                question, logger
+            # 单次检索模式（无回退）
+            retrieval_start = time.time()
+            docs_with_scores = similarity_search_with_score(
+                self.vector_store, context_question, k=TOP_K
             )
+            retrieval_duration = (time.time() - retrieval_start) * 1000
+            logger.log_retrieval(
+                context_question, "vector", TOP_K,
+                [{'content': doc.page_content[:100], 'source': doc.metadata.get('source', ''),
+                  'score': float(score)} for doc, score in docs_with_scores],
+                retrieval_duration
+            )
+            fallback_used = False
             used_iteration = False
 
         # 重排
@@ -157,7 +196,7 @@ class EnhancedRAGChain:
                 (doc, convert_distance_to_similarity(score) if score > 1 else score)
                 for doc, score in docs_with_scores
             ]
-            rerank_result = self._reranker.rerank(question, docs_with_sim)
+            rerank_result = self._reranker.rerank(context_question, docs_with_sim)
             logger.log_rerank(
                 rerank_result.before_ranking,
                 rerank_result.after_ranking,
@@ -173,8 +212,8 @@ class EnhancedRAGChain:
 
         if enable_web_search and WEB_SEARCH_ENABLED:
             # 检查本地证据是否充分
-            if not final_docs or self._should_use_web_search(question, final_docs):
-                web_result = self._web_agent.research(question)
+            if not final_docs or self._should_use_web_search(context_question, final_docs):
+                web_result = self._web_agent.research(context_question)
                 used_web_search = web_result.search_success
 
                 if web_result.search_success:
@@ -188,8 +227,8 @@ class EnhancedRAGChain:
         # 生成最终答案
         if used_web_search and web_result:
             # 使用多智能体协作
-            local_result = self._local_agent.research(question)
-            final_answer = self._arbiter.arbitrate(question, local_result, web_result)
+            local_result = self._local_agent.research(context_question)
+            final_answer = self._arbiter.arbitrate(context_question, local_result, web_result)
 
             answer = final_answer.answer
             evidence_local = [
@@ -202,7 +241,7 @@ class EnhancedRAGChain:
             ]
         else:
             # 仅使用本地证据
-            answer = self._generate_answer(question, final_docs, intent, state)
+            answer = self._generate_answer(context_question, final_docs, intent, state)
             evidence_local = [
                 {
                     'content': doc.page_content,
@@ -215,6 +254,10 @@ class EnhancedRAGChain:
 
         # 提取记忆（兼容原有功能）
         new_memories = self._extract_memories(answer)
+
+        if state:
+            state.add_user_message(question, intent=intent.value)
+            state.add_assistant_message(answer)
 
         # 记录最终结果
         logger.set_answer(answer)
@@ -260,19 +303,20 @@ class EnhancedRAGChain:
         start_time = time.time()
 
         # 意图识别
-        intent, confidence = detect_intent(question)
+        context_question = self._contextualize_question(question, state)
+        intent, confidence = detect_intent(context_question)
         logger.set_intent(intent.value)
 
         # 并行执行本地和网络研究
         if enable_web_search and WEB_SEARCH_ENABLED:
-            local_task = self._local_agent.research_async(question)
-            web_task = self._web_agent.research_async(question)
+            local_task = self._local_agent.research_async(context_question)
+            web_task = self._web_agent.research_async(context_question)
 
             local_result, web_result = await asyncio.gather(local_task, web_task)
 
             # 裁决
             final_answer = await self._arbiter.arbitrate_async(
-                question, local_result, web_result
+                context_question, local_result, web_result
             )
 
             answer = final_answer.answer
@@ -286,7 +330,7 @@ class EnhancedRAGChain:
             ]
             used_web_search = web_result.search_success
         else:
-            local_result = await self._local_agent.research_async(question)
+            local_result = await self._local_agent.research_async(context_question)
             answer = local_result.summary
             evidence_local = [
                 {'content': e.content, 'source': e.source, 'score': float(e.score)}
@@ -296,6 +340,11 @@ class EnhancedRAGChain:
             used_web_search = False
 
         new_memories = self._extract_memories(answer)
+
+        if state:
+            state.add_user_message(question, intent=intent.value)
+            state.add_assistant_message(answer)
+
         logger.set_answer(answer)
         logger.save()
 
@@ -484,7 +533,7 @@ class EnhancedRAGChain:
     ) -> str:
         """生成答案"""
         if not docs_with_scores:
-            return "抱歉，未能在知识库中找到相关信息来回答您的问题。"
+            return "抱歉，未能在本地知识库中找到相关信息。\n\n【来源说明】本地: 未找到 网络: 未使用"
 
         # 准备上下文
         context = "\n\n".join([
@@ -495,9 +544,13 @@ class EnhancedRAGChain:
         # 用户信息
         user_info = ""
         memories = ""
+        history = ""
         if state:
             user_info = state.get_profile_summary()
             memories = state.get_memories_text()
+            history = state.get_history_text(3)
+        if history:
+            memories = f"{memories}\n\nRecent conversation:\n{history}"
 
         prompt = f"""你是首都师范大学的学业咨询助手。请基于以下参考资料回答用户问题。
 
@@ -524,9 +577,10 @@ class EnhancedRAGChain:
         try:
             llm = self._get_llm()
             response = llm.invoke(prompt)
-            return response.content.strip()
+            answer = response.content.strip()
+            return f"{answer}\n\n【来源说明】本地: 已使用 网络: 未使用"
         except Exception as e:
-            return f"生成回答时出错：{str(e)}"
+            return f"生成回答时出错：{str(e)}\n\n【来源说明】本地: 已使用 网络: 未使用"
 
     def _extract_memories(self, answer: str) -> List[str]:
         """从答案中提取记忆标记"""

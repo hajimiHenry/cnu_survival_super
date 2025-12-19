@@ -90,17 +90,8 @@ class LocalEvidenceAgent:
             self.vector_store, question, k=k
         )
 
-        # 检查是否需要回退
+        # 不使用回退检索
         fallback_used = False
-        if self._judge.quick_judge(docs_with_scores, score_is_distance=True):
-            # 尝试查询改写
-            rewrite_result = self._transformer.rewrite(question)
-            new_docs = similarity_search_with_score(
-                self.vector_store, rewrite_result.transformed_query, k=k
-            )
-            if new_docs:
-                docs_with_scores = self._merge_results(docs_with_scores, new_docs)
-                fallback_used = True
 
         # 重排
         if docs_with_scores:

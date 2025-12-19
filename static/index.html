@@ -383,7 +383,245 @@
 
         .new-memory-notice ul { margin-left: 16px; color: #155724; }
 
-        /* ========== 输入指示器 ========== */
+        /* ========== 智能体工作状态面板 ========== */
+        .agent-status-panel {
+            display: none;
+            align-self: flex-start;
+            background: linear-gradient(180deg, #ffffff 0%, #f8f8f8 100%);
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 280px;
+            max-width: 360px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            animation: panelSlideIn 0.3s ease-out;
+        }
+
+        .agent-status-panel.show { display: block; }
+
+        @keyframes panelSlideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .agent-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .agent-panel-header .icon {
+            font-size: 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .agent-panel-header .title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .agent-panel-header .subtitle {
+            font-size: 11px;
+            color: #888;
+            margin-left: auto;
+        }
+
+        .agent-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+            font-size: 12px;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+
+        .agent-step .step-icon {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .agent-step.pending .step-icon {
+            background: #f0f0f0;
+            border: 1px dashed #ccc;
+            color: #aaa;
+        }
+
+        .agent-step.active .step-icon {
+            background: linear-gradient(180deg, #4cd964 0%, #2ecc40 100%);
+            border: 1px solid #27ae36;
+            color: white;
+            animation: stepPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes stepPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(76,217,100,0.4); }
+            50% { box-shadow: 0 0 0 6px rgba(76,217,100,0); }
+        }
+
+        .agent-step.done .step-icon {
+            background: linear-gradient(180deg, #4cd964 0%, #2ecc40 100%);
+            border: 1px solid #27ae36;
+            color: white;
+        }
+
+        .agent-step.skipped .step-icon {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            color: #aaa;
+        }
+
+        .agent-step .step-name {
+            font-weight: 500;
+            color: #555;
+            min-width: 90px;
+        }
+
+        .agent-step.active .step-name {
+            color: #2ecc40;
+            font-weight: 600;
+        }
+
+        .agent-step.done .step-name {
+            color: #27ae36;
+        }
+
+        .agent-step.skipped .step-name {
+            color: #aaa;
+            text-decoration: line-through;
+        }
+
+        .agent-step .step-status {
+            color: #888;
+            font-size: 11px;
+            flex: 1;
+        }
+
+        .agent-step.active .step-status {
+            color: #2ecc40;
+        }
+
+        .agent-step .step-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #e0e0e0;
+            border-top-color: #4cd964;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .agent-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #ddd, transparent);
+            margin: 8px 0;
+        }
+
+        .agent-panel-footer {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            font-size: 11px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .agent-panel-footer .timer {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* 思考过程展示区 */
+        .agent-thinking {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            display: none;
+        }
+
+        .agent-thinking.show {
+            display: block;
+        }
+
+        .thinking-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .thinking-content {
+            font-size: 12px;
+            color: #555;
+            line-height: 1.5;
+            max-height: 80px;
+            overflow-y: auto;
+            padding: 8px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            border: 1px solid #eee;
+        }
+
+        .thinking-content:empty {
+            display: none;
+        }
+
+        .thinking-item {
+            padding: 4px 0;
+            border-bottom: 1px dashed #e0e0e0;
+            animation: thinkFadeIn 0.3s ease-out;
+        }
+
+        .thinking-item:last-child {
+            border-bottom: none;
+        }
+
+        @keyframes thinkFadeIn {
+            from { opacity: 0; transform: translateX(-5px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .thinking-item .think-agent {
+            font-weight: 600;
+            color: #2ecc40;
+            margin-right: 6px;
+        }
+
+        .thinking-item .think-msg {
+            color: #333;
+        }
+
+        .thinking-item .think-detail {
+            color: #888;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        /* 旧的输入指示器保留作为后备 */
         .typing-indicator {
             display: none;
             align-self: flex-start;
@@ -769,6 +1007,45 @@
                         <span class="welcome-tip" onclick="askQuestion('帮我写一封请假邮件')">请假邮件模板</span>
                     </div>
                 </div>
+                <!-- 智能体工作状态面板 -->
+                <div class="agent-status-panel" id="agentStatusPanel">
+                    <div class="agent-panel-header">
+                        <span class="icon">🤖</span>
+                        <span class="title">智能体协作中</span>
+                        <span class="subtitle" id="agentElapsedTime">0.0s</span>
+                    </div>
+                    <div class="agent-step pending" id="step-intent" data-step="intent">
+                        <div class="step-icon">1</div>
+                        <span class="step-name">意图识别</span>
+                        <span class="step-status">等待中</span>
+                    </div>
+                    <div class="agent-step pending" id="step-local" data-step="local">
+                        <div class="step-icon">2</div>
+                        <span class="step-name">LocalAgent</span>
+                        <span class="step-status">等待中</span>
+                    </div>
+                    <div class="agent-step pending" id="step-web" data-step="web">
+                        <div class="step-icon">3</div>
+                        <span class="step-name">WebAgent</span>
+                        <span class="step-status">等待中</span>
+                    </div>
+                    <div class="agent-step pending" id="step-arbiter" data-step="arbiter">
+                        <div class="step-icon">4</div>
+                        <span class="step-name">Arbiter</span>
+                        <span class="step-status">等待中</span>
+                    </div>
+                    <div class="agent-divider"></div>
+                    <div class="agent-step pending" id="step-generate" data-step="generate">
+                        <div class="step-icon">5</div>
+                        <span class="step-name">生成答案</span>
+                        <span class="step-status">等待中</span>
+                    </div>
+                    <!-- 思考过程展示区 -->
+                    <div class="agent-thinking" id="agentThinking">
+                        <div class="thinking-label">💭 思考过程</div>
+                        <div class="thinking-content" id="thinkingContent"></div>
+                    </div>
+                </div>
                 <div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
             </div>
             <div class="input-container">
@@ -803,8 +1080,304 @@
     </div>
     <script>
         let isLoading = false;
+        let agentTimer = null;
+        let agentStartTime = null;
+        let streamResult = null;  // 存储最终结果
+
         document.addEventListener('DOMContentLoaded', () => { loadProfile(); loadMemories(); loadHistory(); });
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); }
+
+        // ========== 智能体状态面板控制 (真实 SSE 版本) ==========
+        function showAgentPanel() {
+            const panel = document.getElementById('agentStatusPanel');
+            panel.classList.add('show');
+
+            // 重置所有步骤状态
+            ['step-intent', 'step-local', 'step-web', 'step-arbiter', 'step-generate'].forEach((id, i) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.className = 'agent-step pending';
+                    el.querySelector('.step-status').textContent = '等待中';
+                    el.querySelector('.step-icon').innerHTML = i + 1;
+                    const spinner = el.querySelector('.step-spinner');
+                    if (spinner) spinner.remove();
+                }
+            });
+
+            // 清空思考过程
+            const thinking = document.getElementById('agentThinking');
+            thinking.classList.remove('show');
+            document.getElementById('thinkingContent').innerHTML = '';
+
+            // 启动计时器
+            agentStartTime = Date.now();
+            agentTimer = setInterval(updateElapsedTime, 100);
+            scrollToBottom();
+        }
+
+        function hideAgentPanel() {
+            const panel = document.getElementById('agentStatusPanel');
+            panel.classList.remove('show');
+            if (agentTimer) {
+                clearInterval(agentTimer);
+                agentTimer = null;
+            }
+        }
+
+        function updateElapsedTime() {
+            if (agentStartTime) {
+                const elapsed = ((Date.now() - agentStartTime) / 1000).toFixed(1);
+                document.getElementById('agentElapsedTime').textContent = elapsed + 's';
+            }
+        }
+
+        function setStepActive(stepId, statusText) {
+            const el = document.getElementById(stepId);
+            if (!el) return;
+            el.className = 'agent-step active';
+            el.querySelector('.step-status').textContent = statusText || '处理中...';
+            const existingSpinner = el.querySelector('.step-spinner');
+            if (!existingSpinner) {
+                const spinner = document.createElement('div');
+                spinner.className = 'step-spinner';
+                el.appendChild(spinner);
+            }
+        }
+
+        function setStepDone(stepId, statusText) {
+            const el = document.getElementById(stepId);
+            if (!el) return;
+            el.className = 'agent-step done';
+            el.querySelector('.step-status').textContent = statusText || '完成';
+            el.querySelector('.step-icon').innerHTML = '✓';
+            const spinner = el.querySelector('.step-spinner');
+            if (spinner) spinner.remove();
+        }
+
+        function setStepSkipped(stepId, reason) {
+            const el = document.getElementById(stepId);
+            if (!el) return;
+            el.className = 'agent-step skipped';
+            el.querySelector('.step-status').textContent = reason || '跳过';
+            const spinner = el.querySelector('.step-spinner');
+            if (spinner) spinner.remove();
+        }
+
+        // 添加思考过程项
+        function addThinkingItem(agent, message, detail) {
+            const thinking = document.getElementById('agentThinking');
+            thinking.classList.add('show');
+            const content = document.getElementById('thinkingContent');
+            const item = document.createElement('div');
+            item.className = 'thinking-item';
+            item.innerHTML = `<span class="think-agent">[${agent}]</span><span class="think-msg">${escapeHtml(message)}</span>${detail ? `<span class="think-detail">- ${escapeHtml(detail)}</span>` : ''}`;
+            content.appendChild(item);
+            content.scrollTop = content.scrollHeight;
+        }
+
+        // ========== SSE 事件处理 ==========
+        function handleSSEEvent(event) {
+            const { type, agent, message, detail, data } = event;
+
+            switch (type) {
+                case 'start':
+                    addThinkingItem('系统', '开始处理问题', '');
+                    break;
+
+                case 'intent_start':
+                    setStepActive('step-intent', message);
+                    break;
+
+                case 'intent_done':
+                    setStepDone('step-intent', message);
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'local_agent_start':
+                    setStepActive('step-local', message);
+                    addThinkingItem(agent, message, '');
+                    break;
+
+                case 'local_agent_search':
+                case 'local_agent_rerank':
+                    setStepActive('step-local', message);
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'local_agent_think':
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'local_agent_done':
+                    setStepDone('step-local', message);
+                    addThinkingItem(agent, '研究完成', `${data.evidence_count || 0} 条证据`);
+                    break;
+
+                case 'fallback_start':
+                case 'fallback_done':
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'web_agent_start':
+                    setStepActive('step-web', message);
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'web_agent_search':
+                    setStepActive('step-web', message);
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'web_agent_think':
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'web_agent_done':
+                    setStepDone('step-web', message);
+                    addThinkingItem(agent, '搜索完成', `${data.evidence_count || 0} 条结果`);
+                    break;
+
+                case 'web_agent_skip':
+                    setStepSkipped('step-web', detail || '跳过');
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'arbiter_start':
+                    setStepActive('step-arbiter', message);
+                    addThinkingItem(agent, message, '');
+                    break;
+
+                case 'arbiter_conflict':
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'arbiter_think':
+                    addThinkingItem(agent, message, detail);
+                    break;
+
+                case 'arbiter_done':
+                    setStepDone('step-arbiter', message);
+                    addThinkingItem(agent, '裁决完成', `置信度: ${data.confidence || '中'}`);
+                    break;
+
+                case 'generate_start':
+                    setStepActive('step-generate', message);
+                    // 如果没有使用 web，跳过 web 和 arbiter
+                    break;
+
+                case 'generate_done':
+                    setStepDone('step-generate', '已完成');
+                    break;
+
+                case 'complete':
+                    streamResult = data;
+                    // 标记所有未完成的步骤为跳过
+                    if (!streamResult.used_web_search) {
+                        const webEl = document.getElementById('step-web');
+                        if (webEl && webEl.classList.contains('pending')) {
+                            setStepSkipped('step-web', '无需联网');
+                        }
+                        const arbEl = document.getElementById('step-arbiter');
+                        if (arbEl && arbEl.classList.contains('pending')) {
+                            setStepSkipped('step-arbiter', '跳过');
+                        }
+                    }
+                    addThinkingItem('系统', '处理完成', `总耗时 ${Math.round(data.total_duration_ms || 0)}ms`);
+                    break;
+
+                case 'error':
+                    addThinkingItem('错误', message, detail);
+                    break;
+            }
+            scrollToBottom();
+        }
+
+        // ========== 使用 SSE 流发送消息 ==========
+        async function sendMessage() {
+            if (isLoading) return;
+            const input = document.getElementById('messageInput');
+            const question = input.value.trim();
+            if (!question) return;
+
+            const welcome = document.getElementById('welcomeMessage');
+            if (welcome) welcome.style.display = 'none';
+
+            addMessageToUI('user', question);
+            input.value = '';
+            autoResize(input);
+
+            isLoading = true;
+            document.getElementById('sendBtn').disabled = true;
+            showAgentPanel();
+            streamResult = null;
+
+            try {
+                const response = await fetch('/api/chat/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        enable_web_search: true,
+                        use_enhanced: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const eventData = JSON.parse(line.slice(6));
+                                handleSSEEvent(eventData);
+                            } catch (e) {
+                                console.error('解析 SSE 事件失败:', e);
+                            }
+                        }
+                    }
+                }
+
+                // 处理最终结果
+                if (streamResult) {
+                    setTimeout(() => {
+                        hideAgentPanel();
+                        addMessageToUI('assistant', streamResult.answer, streamResult.intent, streamResult.new_memories || [], streamResult);
+                        if (streamResult.new_memories && streamResult.new_memories.length > 0) {
+                            loadMemories();
+                        }
+                        scrollToBottom();
+                    }, 600);
+                } else {
+                    hideAgentPanel();
+                    addMessageToUI('assistant', '处理完成，但未能获取结果。');
+                }
+
+            } catch (e) {
+                console.error('发送消息失败:', e);
+                hideAgentPanel();
+                addMessageToUI('assistant', '网络错误，请检查服务是否正常运行。');
+            } finally {
+                isLoading = false;
+                document.getElementById('sendBtn').disabled = false;
+                scrollToBottom();
+            }
+        }
+
+        function askQuestion(q) { document.getElementById('messageInput').value = q; sendMessage(); }
+
         async function loadProfile() { try { const r = await fetch('/api/profile'); const d = await r.json(); document.getElementById('grade').value = d.grade || ''; document.getElementById('college').value = d.college || ''; document.getElementById('major').value = d.major || ''; } catch(e) { console.error(e); } }
         async function saveProfile() { const p = { grade: document.getElementById('grade').value.trim(), college: document.getElementById('college').value.trim(), major: document.getElementById('major').value.trim() }; try { const r = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }); const d = await r.json(); if (d.success) showToast('信息保存成功'); } catch(e) { showToast('保存失败'); } }
         async function loadMemories() { try { const r = await fetch('/api/memories'); const d = await r.json(); renderMemories(d.memories); } catch(e) { console.error(e); } }
@@ -814,13 +1387,38 @@
         async function clearMemories() { if (!confirm('确定要清空所有记忆吗？')) return; try { await fetch('/api/memories', { method: 'DELETE' }); loadMemories(); showToast('记忆已清空'); } catch(e) { console.error(e); } }
         async function loadHistory() { try { const r = await fetch('/api/history'); const d = await r.json(); if (d.history && d.history.length > 0) { document.getElementById('welcomeMessage').style.display = 'none'; d.history.forEach(m => addMessageToUI(m.role, m.content, m.intent)); scrollToBottom(); } } catch(e) { console.error(e); } }
         async function clearHistory() { if (!confirm('确定要清空对话历史吗？')) return; try { await fetch('/api/history', { method: 'DELETE' }); location.reload(); } catch(e) { console.error(e); } }
-        async function sendMessage() { if (isLoading) return; const i = document.getElementById('messageInput'); const q = i.value.trim(); if (!q) return; const w = document.getElementById('welcomeMessage'); if (w) w.style.display = 'none'; addMessageToUI('user', q); i.value = ''; autoResize(i); isLoading = true; document.getElementById('sendBtn').disabled = true; showTypingIndicator(); scrollToBottom(); try { const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, enable_web_search: true, use_enhanced: true }) }); const d = await r.json(); if (r.ok) { addMessageToUI('assistant', d.answer, d.intent, d.new_memories, d); if (d.new_memories && d.new_memories.length > 0) loadMemories(); } else { addMessageToUI('assistant', '抱歉，出现错误：' + (d.detail || '未知错误')); } } catch(e) { addMessageToUI('assistant', '网络错误，请检查服务是否正常运行。'); } finally { isLoading = false; document.getElementById('sendBtn').disabled = false; hideTypingIndicator(); scrollToBottom(); } }
-        function askQuestion(q) { document.getElementById('messageInput').value = q; sendMessage(); }
-        function addMessageToUI(r, c, intent='', mem=[], extra={}) { const ct = document.getElementById('chatContainer'); const ti = document.getElementById('typingIndicator'); const d = document.createElement('div'); d.className = 'message ' + r; const a = r === 'user' ? '👤' : '🎓'; const t = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); let mn = ''; if (mem && mem.length > 0) { mn = '<div class="new-memory-notice"><div class="new-memory-notice-title">🧠 系统已自动记录</div><ul>' + mem.map(x => '<li>' + escapeHtml(x) + '</li>').join('') + '</ul></div>'; } let evSection = ''; if (r === 'assistant' && extra && (extra.evidence_local || extra.evidence_web)) { let tags = []; if (extra.used_fallback) tags.push('回退检索'); if (extra.used_iteration) tags.push('迭代查询'); if (extra.used_web_search) tags.push('联网搜索'); let tagHtml = tags.length > 0 ? '<div style="margin-bottom:8px;">' + tags.map(x=>'<span style="background:#4cd964;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:4px;">'+x+'</span>').join('') + '</div>' : ''; let localEv = (extra.evidence_local || []).slice(0,3).map((e,i)=>'<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #eee;"><strong>📁 '+escapeHtml(e.source||'本地')+'</strong><br><span style="color:#666;">'+escapeHtml((e.content||'').substring(0,100))+'...</span></div>').join(''); let webEv = (extra.evidence_web || []).slice(0,2).map((e,i)=>'<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #eee;"><strong>🌐 '+escapeHtml(e.source||'网络')+'</strong><br><span style="color:#666;">'+escapeHtml((e.content||'').substring(0,100))+'...</span></div>').join(''); if (localEv || webEv) { evSection = '<details style="margin-top:10px;background:#f9f9f9;border-radius:6px;padding:8px;"><summary style="cursor:pointer;font-size:12px;color:#666;">📋 查看证据来源 (本地:' + (extra.evidence_local||[]).length + ', 网络:' + (extra.evidence_web||[]).length + ')</summary><div style="margin-top:8px;">' + tagHtml + (localEv ? '<div style="margin-bottom:8px;"><strong style="font-size:11px;color:#333;">本地知识库</strong>' + localEv + '</div>' : '') + (webEv ? '<div><strong style="font-size:11px;color:#333;">网络搜索</strong>' + webEv + '</div>' : '') + (extra.total_duration_ms ? '<div style="font-size:11px;color:#999;margin-top:6px;">耗时: ' + Math.round(extra.total_duration_ms) + 'ms</div>' : '') + '</div></details>'; } } d.innerHTML = '<div class="message-avatar">' + a + '</div><div class="message-content"><div class="message-bubble">' + escapeHtml(c) + '</div>' + evSection + mn + '<div class="message-meta"><span>' + t + '</span>' + (intent ? '<span class="intent-tag">' + intent + '</span>' : '') + '</div></div>'; ct.insertBefore(d, ti); }
-        function showTypingIndicator() { document.getElementById('typingIndicator').classList.add('show'); }
-        function hideTypingIndicator() { document.getElementById('typingIndicator').classList.remove('show'); }
+
+        function addMessageToUI(r, c, intent='', mem=[], extra={}) {
+            const ct = document.getElementById('chatContainer');
+            const panel = document.getElementById('agentStatusPanel');
+            const d = document.createElement('div');
+            d.className = 'message ' + r;
+            const a = r === 'user' ? '👤' : '🎓';
+            const t = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            let mn = '';
+            if (mem && mem.length > 0) {
+                mn = '<div class="new-memory-notice"><div class="new-memory-notice-title">🧠 系统已自动记录</div><ul>' + mem.map(x => '<li>' + escapeHtml(x) + '</li>').join('') + '</ul></div>';
+            }
+            let evSection = '';
+            if (r === 'assistant' && extra && (extra.evidence_local || extra.evidence_web)) {
+                let tags = [];
+                if (extra.used_fallback) tags.push('回退检索');
+                if (extra.used_iteration) tags.push('迭代查询');
+                if (extra.used_web_search) tags.push('联网搜索');
+                let tagHtml = tags.length > 0 ? '<div style="margin-bottom:8px;">' + tags.map(x=>'<span style="background:#4cd964;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:4px;">'+x+'</span>').join('') + '</div>' : '';
+                // 显示全部证据，不再截断
+                let localEv = (extra.evidence_local || []).map((e,i)=>'<div style="font-size:12px;padding:6px 0;border-bottom:1px solid #eee;"><strong>📁 '+escapeHtml(e.source||'本地')+'</strong><br><span style="color:#666;">'+escapeHtml((e.content||'').substring(0,150))+'...</span></div>').join('');
+                let webEv = (extra.evidence_web || []).map((e,i)=>'<div style="font-size:12px;padding:6px 0;border-bottom:1px solid #eee;"><strong>🌐 '+escapeHtml(e.source||'网络')+'</strong><br><span style="color:#666;">'+escapeHtml((e.content||'').substring(0,150))+'...</span></div>').join('');
+                if (localEv || webEv) {
+                    evSection = '<details style="margin-top:10px;background:#f9f9f9;border-radius:6px;padding:8px;"><summary style="cursor:pointer;font-size:12px;color:#666;">📋 查看证据来源 (本地:' + (extra.evidence_local||[]).length + ', 网络:' + (extra.evidence_web||[]).length + ')</summary><div style="margin-top:8px;max-height:300px;overflow-y:auto;">' + tagHtml + (localEv ? '<div style="margin-bottom:12px;"><strong style="font-size:11px;color:#333;display:block;margin-bottom:6px;">📚 本地知识库 (' + (extra.evidence_local||[]).length + '条)</strong><div style="max-height:150px;overflow-y:auto;padding-right:4px;">' + localEv + '</div></div>' : '') + (webEv ? '<div><strong style="font-size:11px;color:#333;display:block;margin-bottom:6px;">🌐 网络搜索 (' + (extra.evidence_web||[]).length + '条)</strong><div style="max-height:150px;overflow-y:auto;padding-right:4px;">' + webEv + '</div></div>' : '') + (extra.total_duration_ms ? '<div style="font-size:11px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #ddd;">⏱ 总耗时: ' + Math.round(extra.total_duration_ms) + 'ms</div>' : '') + '</div></details>';
+                }
+            }
+            d.innerHTML = '<div class="message-avatar">' + a + '</div><div class="message-content"><div class="message-bubble">' + escapeHtml(c) + '</div>' + evSection + mn + '<div class="message-meta"><span>' + t + '</span>' + (intent ? '<span class="intent-tag">' + intent + '</span>' : '') + '</div></div>';
+            ct.insertBefore(d, panel);
+        }
+
         function scrollToBottom() { const c = document.getElementById('chatContainer'); c.scrollTop = c.scrollHeight; }
-        function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+        function escapeHtml(t) { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
         function autoResize(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 100) + 'px'; }
         function handleKeyDown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
         function showToast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2000); }

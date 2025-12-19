@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv, set_key
@@ -23,6 +23,7 @@ from dotenv import load_dotenv, set_key
 from src.vector_store import load_vector_store
 from src.rag_chain import answer_question
 from src.enhanced_rag_chain import EnhancedRAGChain
+from src.streaming_rag import StreamingRAGProcessor
 from src.state import ConversationState, load_user_state, save_user_state
 from src.intent_router import detect_intent
 from src.logger import StructuredLogger, get_trace_detail
@@ -106,6 +107,7 @@ class ApiConfig(BaseModel):
 vector_store = None
 state = None
 enhanced_chain = None  # 增强版RAG链
+streaming_processor = None  # 流式处理器
 
 
 # ============ 生命周期管理 ============
@@ -113,21 +115,24 @@ enhanced_chain = None  # 增强版RAG链
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global vector_store, state, enhanced_chain
+    global vector_store, state, enhanced_chain, streaming_processor
 
     print("正在加载知识库...")
     try:
         vector_store = load_vector_store()
         enhanced_chain = EnhancedRAGChain(vector_store)
+        streaming_processor = StreamingRAGProcessor(vector_store)
         print("知识库加载完成！")
     except FileNotFoundError:
         print("警告: 向量索引不存在，请先运行 build_index.py")
         vector_store = None
         enhanced_chain = None
+        streaming_processor = None
     except Exception as e:
         print(f"警告: 加载向量索引失败 - {e}")
         vector_store = None
         enhanced_chain = None
+        streaming_processor = None
 
     print("正在加载用户数据...")
     state = load_user_state()
@@ -239,6 +244,64 @@ async def chat(request: ChatRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"处理问题时出错: {str(e)}")
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    流式聊天接口 - 使用 SSE 实时推送智能体状态
+
+    返回格式: Server-Sent Events
+    每个事件包含:
+    - type: 事件类型
+    - agent: 智能体名称
+    - message: 用户可见消息
+    - detail: 详细信息/思考过程
+    - data: 附加数据
+    """
+    global state
+
+    if streaming_processor is None:
+        raise HTTPException(
+            status_code=503,
+            detail="知识库未加载，请先运行 build_index.py 构建索引"
+        )
+
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="问题不能为空")
+
+    async def event_generator():
+        """生成 SSE 事件流"""
+        try:
+            async for event in streaming_processor.process_stream(
+                question,
+                state=state,
+                enable_web_search=request.enable_web_search
+            ):
+                yield event.to_sse()
+
+        except Exception as e:
+            # 发送错误事件
+            import json
+            error_data = {
+                "type": "error",
+                "agent": "",
+                "message": "处理出错",
+                "detail": str(e),
+                "data": {}
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # 禁用 nginx 缓冲
+        }
+    )
 
 
 @app.get("/api/profile")
